@@ -9,21 +9,27 @@ import random
 
 
 def main():
-    max_episodes = 5000
+    max_episodes = 50000
     # store the previous observations in replay memory
     replay_buffer = deque()
+    total_count = 0
+
+    with tf.name_scope("network"):
+        mainDQN = DQN(input_size=input_size, output_size=output_size, name="main")
+        targetDQN = DQN(input_size=input_size, output_size=output_size, name="target")
+
+    with tf.name_scope("train"):
+        copy_ops = get_copy_var_ops(dest_scope_name="target", src_scope_name="main")
+
+    with tf.name_scope("miscellaneous"):
+        init = tf.global_variables_initializer()
 
     with tf.Session() as sess:
-        mainDQN = DQN(sess, input_size=input_size,
-                      output_size=output_size, name="main")
-        targetDQN = DQN(sess, input_size=input_size,
-                        output_size=output_size, name="target")
-        tf.global_variables_initializer().run()
 
-        # initial copy main_net -> target_net
-        copy_ops = get_copy_var_ops(
-            dest_scope_name="target", src_scope_name="main")
+        sess.run(init)
         sess.run(copy_ops)
+        mainDQN.set_session(sess)
+        targetDQN.set_session(sess)
 
         for episode in range(max_episodes):
             e = 1. / ((episode / 10) + 1)
@@ -35,7 +41,6 @@ def main():
                 if np.random.rand(1) < e:
                     action = env.action_space.sample()
                 else:
-                    # Choose an action by greedily from the Q-network
                     action = np.argmax(mainDQN.predict(state=state))
 
                 next_state, reward, done, _ = env.step(action)
@@ -49,9 +54,11 @@ def main():
                 state = next_state
                 step_count += 1
                 if step_count > 10000:
+                    bot_play(mainDQN=mainDQN)
                     break
-                    
+
             print("Episode: {} steps: {}".format(episode, step_count))
+            total_count = total_count + step_count
             if step_count > 10000:
                 pass
 
